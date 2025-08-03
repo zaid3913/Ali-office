@@ -369,6 +369,7 @@ body.dark-mode .logout-btn {
     snapshot.forEach((doc) => {
       const data = doc.data();
       data.id = doc.id;
+      data.createdAt = data.createdAt?.toDate?.() || new Date(data.createdAt);
       invoices.push(data);
     });
     renderReportTable();
@@ -392,24 +393,28 @@ body.dark-mode .logout-btn {
     function applyFilters() {
   const fromDate = document.getElementById('fromDate').value;
   const toDate = document.getElementById('toDate').value;
-  
+
   let filteredInvoices = [...invoices];
-  
+  let filteredExpenses = [...expenses];
+
   if (fromDate) {
     const from = new Date(fromDate);
     filteredInvoices = filteredInvoices.filter(inv => new Date(inv.createdAt) >= from);
+    filteredExpenses = filteredExpenses.filter(exp => new Date(exp.date) >= from);
   }
-  
+
   if (toDate) {
     const to = new Date(toDate);
     to.setDate(to.getDate() + 1);
     filteredInvoices = filteredInvoices.filter(inv => new Date(inv.createdAt) <= to);
+    filteredExpenses = filteredExpenses.filter(exp => new Date(exp.date) <= to);
   }
-  
+
   renderReportTable(filteredInvoices);
-  calculateFinancialReport(filteredInvoices);
-  renderSalesChart(filteredInvoices); // سيستخدم النوع الحالي (خطي أو عمودي)
+  calculateFinancialReport(filteredInvoices, filteredExpenses);
+  renderSalesChart(filteredInvoices);
 }
+
     
     // تصفية حسب الفترة
     function filterReports(period) {
@@ -447,7 +452,7 @@ body.dark-mode .logout-btn {
     
     // حساب التقرير المالي
     function calculateFinancialReport(filteredInvoices = invoices, filteredExpenses = expenses) {
-      const totalSales = filteredInvoices.reduce((sum, inv) => sum + inv.total, 0);
+      const totalSales = filteredInvoices.reduce((sum, inv) => sum + inv.paid, 0);
       const totalExpenses = filteredExpenses.reduce((sum, exp) => sum + exp.amount, 0);
       const grossProfit = totalSales;
       const netProfit = grossProfit - totalExpenses;
@@ -546,6 +551,12 @@ async function restoreInvoice(invoiceId) {
     });
 
     alert('تم استرجاع العملية بنجاح.');
+
+invoices = invoices.filter(inv => inv.id !== invoiceId);
+    renderReportTable();
+    calculateFinancialReport();
+    renderSalesChart();
+
   } catch (error) {
     console.error('خطأ أثناء الاسترجاع:', error);
     alert(`حدث خطأ أثناء استرجاع العملية: ${error.message}`);
