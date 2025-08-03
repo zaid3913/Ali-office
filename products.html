@@ -498,17 +498,28 @@ document.addEventListener('DOMContentLoaded', function() {
 function renderPaginationControls() {
   const containerId = 'paginationControls';
   let container = document.getElementById(containerId);
+
+  // إذا ما موجود العنصر، نخلقه ونضيفه بنهاية المنتجات
   if (!container) {
     container = document.createElement('div');
     container.id = containerId;
     container.style.textAlign = 'center';
-    container.style.marginTop = '15px';
-    document.querySelector('.card:last-of-type').appendChild(container);
+    container.style.marginTop = '20px';
+
+    // نحاول نضيفه بعد قائمة المنتجات مباشرة
+    const productContainer = document.getElementById('productContainer');
+    if (productContainer) {
+      productContainer.parentNode.insertBefore(container, productContainer.nextSibling);
+    } else {
+      document.body.appendChild(container);
+    }
   }
+
+  // نفرغ الأزرار القديمة
   container.innerHTML = '';
 
   const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
-  if (totalPages <= 1) return; // ما نحتاج أزرار إذا صفحة واحدة فقط
+  if (totalPages <= 1) return; // ما نعرض شي إذا فقط صفحة وحدة
 
   for (let i = 1; i <= totalPages; i++) {
     const btn = document.createElement('button');
@@ -520,17 +531,18 @@ function renderPaginationControls() {
     btn.style.backgroundColor = i === currentPage ? '#1abc9c' : '#fff';
     btn.style.color = i === currentPage ? '#fff' : '#000';
     btn.style.cursor = 'pointer';
+    btn.style.transition = '0.3s';
 
-    btn.onclick = function() {
+    btn.onclick = function () {
       currentPage = i;
-      renderProducts();
-      // لو حبيت، تمرير لأعلى الصفحة عند التبديل:
-      window.scrollTo({top: 0, behavior: 'smooth'});
+      renderProducts(); // تعرض المنتجات حسب الصفحة
+      window.scrollTo({ top: 0, behavior: 'smooth' }); // نرجع لأعلى الصفحة
     };
 
     container.appendChild(btn);
   }
 }
+
 
   </script>
 </body>
