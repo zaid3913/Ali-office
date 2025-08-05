@@ -161,7 +161,6 @@ body.dark-mode .logout-btn {
     <li><a href="sales.html"><i class="bi bi-receipt"></i> <span>المبيعات</span></a></li>
     <li><a href="debts.html"><i class="bi bi-credit-card"></i> <span>الديون</span></a></li>
     <li><a href="reports.html"><i class="bi bi-graph-up"></i> <span>التقارير</span></a></li>
-    <li><a href="realprice.html"><i class="bi bi-tag"></i> <span>الأسعار الحقيقية</span></a></li>
     <li><a href="expenses.html"><i class="bi bi-cash-stack"></i> <span>المصاريف</span></a></li>
     <li><a href="settings.html"><i class="bi bi-gear"></i> <span>الإعدادات</span></a></li>
     <div class="sidebar-footer">
@@ -197,6 +196,7 @@ body.dark-mode .logout-btn {
           <button type="button" class="btn-outline-success" onclick="stopBarcodeScanner()">إيقاف</button>
         </div>
         <label>السعر (دينار عراقي)</label><input type="number" id="prodPrice" min="0" required>
+        <label>سعر الشراء (دينار عراقي)</label><input type="number" id="prodRealPrice" min="0" required>
         <label>الكمية</label><input type="number" id="prodQty" min="0" required>
         <label>ملاحظات</label><textarea id="prodNotes"></textarea>
         <button type="submit" class="btn-primary">حفظ</button>
@@ -218,7 +218,9 @@ body.dark-mode .logout-btn {
             <th>النوع</th>
             <th>الباركود</th>
             <th>الكمية</th>
-            <th>السعر (د.ع)</th>
+            <th>سعر الشراء</th>
+            <th>سعر البيع</th>
+            <th>الربح/قطعة</th>
             <th>ملاحظات</th>
             <th>إجراءات</th>
           </tr>
@@ -254,7 +256,8 @@ body.dark-mode .logout-btn {
     const itemsPerPage = 15;
     let filteredProducts = []; // للاحتفاظ بالنتيجة بعد البحث
     let isScanning = false;
-    
+    let editingRowId = null;
+
     // تحميل المنتجات عند بدء التشغيل
     document.addEventListener('DOMContentLoaded', function() {
       loadProducts();
@@ -278,24 +281,38 @@ body.dark-mode .logout-btn {
   const tbody = document.getElementById('productTableBody');
   tbody.innerHTML = '';
 
-  // حساب البداية والنهاية حسب الصفحة
   const startIndex = (currentPage - 1) * itemsPerPage;
   const endIndex = startIndex + itemsPerPage;
   const productsToShow = filteredProducts.slice(startIndex, endIndex);
 
   productsToShow.forEach((p, i) => {
+    const isEditing = editingRowId === p.id;
+    const realPrice = p.realPrice || 0;
+    const profit = p.price - realPrice;
+
     tbody.innerHTML += `
-      <tr>
+      <tr id="row-${p.id}">
         <td>${startIndex + i + 1}</td>
-        <td>${p.name}</td>
-        <td>${p.type}</td>
-        <td>${p.barcode || '-'}</td>
-        <td>${p.quantity}</td>
-        <td>${p.price.toLocaleString()}</td>
-        <td>${p.notes || '-'}</td>
+        <td>${isEditing ? `<input value="${p.name}" id="edit-name-${p.id}" />` : p.name}</td>
+        <td>${isEditing ? `<input value="${p.type}" id="edit-type-${p.id}" />` : p.type}</td>
+        <td>${isEditing ? `<input value="${p.barcode || ''}" id="edit-barcode-${p.id}" />` : (p.barcode || '-')}</td>
+        <td>${isEditing ? `<input type="number" value="${p.quantity}" id="edit-qty-${p.id}" />` : p.quantity}</td>
+        <td>${isEditing ? `<input type="number" value="${realPrice}" id="edit-realPrice-${p.id}" />` : realPrice.toLocaleString()}</td>
+        <td>${isEditing ? `<input type="number" value="${p.price}" id="edit-price-${p.id}" />` : p.price.toLocaleString()}</td>
+        <td>${isEditing ? '-' : profit.toLocaleString()}</td>
+        <td>${isEditing ? `<input value="${p.notes || ''}" id="edit-notes-${p.id}" />` : (p.notes || '-')}</td>
         <td class="action-btns">
-          <button onclick="editProduct('${p.id}')"><i class="bi bi-pencil-square"></i></button>
-          <button onclick="deleteProduct('${p.id}')"><i class="bi bi-trash"></i></button>
+          ${
+            isEditing
+              ? `
+                <button onclick="saveRowEdit('${p.id}')"><i class="bi bi-check-lg"></i></button>
+                <button onclick="cancelEditRow()"><i class="bi bi-x-lg"></i></button>
+              `
+              : `
+                <button onclick="startEditRow('${p.id}')"><i class="bi bi-pencil-square"></i></button>
+                <button onclick="deleteProduct('${p.id}')"><i class="bi bi-trash"></i></button>
+              `
+          }
         </td>
       </tr>
     `;
@@ -303,6 +320,7 @@ body.dark-mode .logout-btn {
 
   renderPaginationControls();
 }
+
     // حفظ المنتج
     function saveProduct(e) {
       e.preventDefault();
@@ -313,6 +331,7 @@ body.dark-mode .logout-btn {
         name: document.getElementById('prodName').value.trim(),
         type: document.getElementById('prodType').value.trim(),
         barcode: document.getElementById('prodBarcode').value.trim(),
+        realPrice: parseFloat(document.getElementById('prodRealPrice').value),
         price: parseFloat(document.getElementById('prodPrice').value),
         quantity: parseInt(document.getElementById('prodQty').value),
         notes: document.getElementById('prodNotes').value.trim(),
@@ -332,20 +351,22 @@ body.dark-mode .logout-btn {
     }
     
     // تعديل المنتج
-    function editProduct(id) {
-      const product = products.find(p => p.id === id);
-      if (!product) return;
+    // function editProduct(id) {
+    //   const product = products.find(p => p.id === id);
+    //   if (!product) return;
       
-      document.getElementById('productId').value = product.id;
-      document.getElementById('prodName').value = product.name;
-      document.getElementById('prodType').value = product.type;
-      document.getElementById('prodBarcode').value = product.barcode || '';
-      document.getElementById('prodPrice').value = product.price;
-      document.getElementById('prodQty').value = product.quantity;
-      document.getElementById('prodNotes').value = product.notes || '';
+    //   document.getElementById('productId').value = product.id;
+    //   document.getElementById('prodName').value = product.name;
+    //   document.getElementById('prodType').value = product.type;
+    //   document.getElementById('prodBarcode').value = product.barcode || '';
+    //   document.getElementById('prodPrice').value = product.price;
+    //   document.getElementById('prodRealPrice').value = product.realPrice || '';
+    //   document.getElementById('prodQty').value = product.quantity;
+    //   document.getElementById('prodNotes').value = product.notes || '';
       
-      toggleForm('productForm');
-    }
+    //   toggleForm('productForm');
+    // }
+    
     
     // حذف المنتج
     function deleteProduct(id) {
@@ -541,6 +562,46 @@ function renderPaginationControls() {
 
     container.appendChild(btn);
   }
+}
+
+
+function startEditRow(id) {
+  if (editingRowId !== null) {
+    alert("أكمل التعديل الحالي أولاً");
+    return;
+  }
+  editingRowId = id;
+  renderProducts();
+}
+
+function cancelEditRow() {
+  editingRowId = null;
+  renderProducts();
+}
+
+function saveRowEdit(id) {
+  const productRef = db.collection('products').doc(id);
+
+  const updated = {
+    name: document.getElementById(`edit-name-${id}`).value.trim(),
+    type: document.getElementById(`edit-type-${id}`).value.trim(),
+    barcode: document.getElementById(`edit-barcode-${id}`).value.trim(),
+    quantity: parseInt(document.getElementById(`edit-qty-${id}`).value),
+    price: parseFloat(document.getElementById(`edit-price-${id}`).value),
+    realPrice: parseFloat(document.getElementById(`edit-realPrice-${id}`).value),
+    notes: document.getElementById(`edit-notes-${id}`).value.trim()
+  };
+
+  productRef.update(updated)
+    .then(() => {
+      editingRowId = null;
+      alert("تم التعديل بنجاح");
+      renderProducts();
+    })
+    .catch(error => {
+      console.error("Error updating product:", error);
+      alert("فشل التعديل");
+    });
 }
 
 

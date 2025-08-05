@@ -228,7 +228,6 @@ body.dark-mode .logout-btn {
     <li><a href="sales.html"><i class="bi bi-receipt"></i> <span>المبيعات</span></a></li>
     <li><a href="debts.html"><i class="bi bi-credit-card"></i> <span>الديون</span></a></li>
     <li><a href="reports.html"><i class="bi bi-graph-up"></i> <span>التقارير</span></a></li>
-    <li><a href="realprice.html"><i class="bi bi-tag"></i> <span>الأسعار الحقيقية</span></a></li>
     <li><a href="expenses.html"><i class="bi bi-cash-stack"></i> <span>المصاريف</span></a></li>
     <li><a href="settings.html"><i class="bi bi-gear"></i> <span>الإعدادات</span></a></li>
     <div class="sidebar-footer">
@@ -351,6 +350,7 @@ body.dark-mode .logout-btn {
     }
     
     // متغيرات عامة
+    let products = [];
     let invoices = [];
     let expenses = [];
     let salesChart = null;
@@ -358,14 +358,24 @@ body.dark-mode .logout-btn {
     
     // تحميل البيانات عند بدء التشغيل
     document.addEventListener('DOMContentLoaded', function() {
+    loadProducts()
       loadInvoices();
       loadExpenses();
     });
+
+        // تحميل المنتجات من Firebase
+    function loadProducts() {
+  db.collection('products').onSnapshot((snapshot) => {
+    snapshot.forEach((doc) => {
+      products.push(doc.data());
+    });
+  });
+  console.log('تم تحميل المنتجات:', products);
+}
     
     // تحميل الفواتير من Firebase
     function loadInvoices() {
   db.collection('invoices').orderBy('createdAt', 'desc').onSnapshot((snapshot) => {
-    invoices = [];
     snapshot.forEach((doc) => {
       const data = doc.data();
       data.id = doc.id;
@@ -376,6 +386,7 @@ body.dark-mode .logout-btn {
     calculateFinancialReport();
     renderSalesChart();
   });
+  console.log('تم تحميل الفواتير:', invoices);
 }
     
     // تحميل المصاريف من Firebase
@@ -388,6 +399,51 @@ body.dark-mode .logout-btn {
         calculateFinancialReport();
       });
     }
+
+
+
+async function getTotalProfit() {
+    let totalRealPrice = 0;
+    let totalPaid = 0;
+    
+    // Get all invoices
+    const invoicesSnapshot = await db.collection('invoices').get();
+    
+    for (const invoiceDoc of invoicesSnapshot.docs) {
+        const invoice = invoiceDoc.data();
+        
+        // Add paid amount
+        totalPaid += invoice.paid || 0;
+        
+        // Go through each line in the invoice
+        for (const line of invoice.lines) {
+            const productId = line.productId;
+            const qty = line.qty;
+            
+            // Find the product in products collection
+            const productDoc = await db.collection('products').doc(productId).get();
+            
+            if (productDoc.exists) {
+                const realPrice = productDoc.data().realPrice || 0;
+                totalRealPrice += realPrice * qty;
+            }
+        }
+    }
+    
+    const profit = totalPaid - totalRealPrice;
+    
+    return {
+        totalPaid: totalPaid,
+        totalRealPrice: totalRealPrice,
+        profit: profit
+    };
+}
+
+// Usage
+getTotalProfit().then(result => {
+  const netProfitElement = document.getElementById('netProfit');
+    netProfitElement.textContent = result.profit.toLocaleString() + ' د.ع';
+});
     
     // تطبيق الفلاتر
     function applyFilters() {
@@ -461,14 +517,7 @@ body.dark-mode .logout-btn {
       document.getElementById('totalExpenses').textContent = totalExpenses.toLocaleString() + ' د.ع';
       document.getElementById('grossProfit').textContent = grossProfit.toLocaleString() + ' د.ع';
       
-      const netProfitElement = document.getElementById('netProfit');
-      netProfitElement.textContent = netProfit.toLocaleString() + ' د.ع';
-      
-      if (netProfit < 0) {
-        netProfitElement.classList.add('negative-profit');
-      } else {
-        netProfitElement.classList.remove('negative-profit');
-      }
+
     }
     
     // عرض جدول المبيعات
